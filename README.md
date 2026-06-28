@@ -53,23 +53,23 @@
 *Upload your UI screenshots to the respective sections below:*
 
 ### NTA Exam Interface Replica
-![NTA Exam Interface Replica (Light)](./path/to/jeearchive-nta-test-interface.png)
-![NTA Exam Interface Replica (Dark)](./path/to/jeearchive-nta-test-interface-dark-mode.png)
+![NTA Exam Interface Replica (Light)](./images/Screenshot%202026-06-28%20151552.png)
+![NTA Exam Interface Replica (Dark)](./images/Screenshot%202026-06-28%20152126.png)
 
 ### Custom Chapterwise Test Interface
-![Custom Chapterwise Test Interface](./path/to/jeearchive-chapterwise-practice-interface.png)
+![Custom Chapterwise Test Interface](./images/Screenshot%202026-06-28%20151143.png)
 
 ### Topic-wise and Chapterwise PYQ Practice
-![PYQ List Interface](./path/to/jeearchive-chpaterwise-pyq-list.png)
+![PYQ List Interface](./images/Screenshot%202026-06-28%20151157.png)
 
 ### Performance Analytics Dashboard
-![Performance Analytics Dashboard](./path/to/jeearchive-dashboard.png)
+![Performance Analytics Dashboard](./images/Screenshot%202026-06-28%20151058.png)
 
 ### Solution Breakdown View
-![Solution Breakdown View](./path/to/jeearchive-solution-interface.png)
+![Solution Breakdown View](./images/Screenshot%202026-06-28%20151206.png)
 
-### Mobile View
-![Mobile View](./path/to/mobile-view.png)
+### DashBoard
+![Dashboard](./images/Screenshot%202026-06-28%20151041.png)
 
 ---
 
