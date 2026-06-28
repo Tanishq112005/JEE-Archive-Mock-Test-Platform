@@ -29,7 +29,7 @@
 |--------|-------|
 | **Core Environment** | Node.js, Express.js, TypeScript |
 | **Database & ORM** | TiDB (MySQL), Prisma ORM |
-| **Caching & In-Memory** | Redis Cloud & Aiven (Valkey) |
+| **Caching & In-Memory** | Aiven Valkey (Single Cache & Hash Ring), Redis Cloud (Bitmaps) |
 | **Message Broker** | RabbitMQ via CloudAMQP |
 | **Storage & CDN** | Backblaze B2, Cloudflare |
 | **Secrets Management** | Doppler (Env Injection) |
@@ -109,7 +109,8 @@ flowchart TB
 
     %% Data Stores
     subgraph DataLayer ["Data & Persistence"]
-        Redis[(Redis Hash Ring)]:::cache
+        RedisCache[(Single Redis Cache)]:::cache
+        RedisRing[(Redis Hash Ring)]:::cache
         Prisma[Prisma ORM]:::data
         DB[(TiDB / MySQL)]:::data
     end
@@ -133,7 +134,8 @@ flowchart TB
     Router --> Services
     
     %% Data Flow
-    Services <-->|Fast Data / Caching| Redis
+    Services <-->|Static Data Caching| RedisCache
+    Services <-->|Temp Sessions / OTPs| RedisRing
     Services <-->|Persistent Data| Prisma
     Prisma <--> DB
     
@@ -144,7 +146,8 @@ flowchart TB
     
     %% PYQ Flow Highlight
     Student -.->|2. Fetch PYQ URL| RL
-    Services -.->|Check PYQ Meta| Redis
+    Services -.->|Check PYQ Meta| RedisCache
+    Services -.->|Cache Miss? Query DB| Prisma
     Services -.->|3. Return JSON Data / URL| Student
     Student -->|4. Download File| CF
     
@@ -153,10 +156,10 @@ flowchart TB
     CF -->|Fetch if missed| B2
 ```
 
-*Note: Backblaze B2 is heavily utilized for storing the images of the questions. When a student requests a PYQ (Previous Year Question paper), the API first checks the Redis cache, and if not found, queries the DB for the metadata. The API returns the JSON Data / URL, and only then does the client hit the Backblaze B2 service (via Cloudflare) to fetch the actual file. Additionally, Core Services also interact with the CDN to fetch these question images when required for internal processing.*
+*Note: The system utilizes two distinct Redis architectures. A **Single Redis Cache** is used for read-heavy static data (like Chapter Data and PYQ metadata); if a cache miss occurs here, the Core Services query the Database directly. Meanwhile, a **Redis Hash Ring** is used exclusively for temporary, write-heavy session data (like active test data, dashboard analytics, and Auth OTPs) until it is permanently saved. Backblaze B2 is heavily utilized for storing the actual images of the questions. The API returns the JSON Data / URL, and only then does the client hit the Backblaze B2 service (via Cloudflare) to fetch the actual file. Additionally, Core Services also interact with the CDN to fetch these question images when required for internal processing.*
 
-### 2. Consistent Hashing & Redis Clusters
-To ensure high availability and load distribution across multiple Redis instances, the system implements a custom **Hash Ring (`HashRingService`)** for Consistent Hashing. 
+### 2. Consistent Hashing & Redis Clusters (For Temporary Data)
+To ensure high availability and load distribution across multiple Redis instances, the system implements a custom **Hash Ring (`HashRingService`)** for Consistent Hashing. This cluster is **strictly used for temporary, volatile data** (like active test sessions, auth OTPs, and real-time dashboard analytics) until it is persisted. 
 - **Dual Hash Rings**: The system maintains two separate rings, one for Authentication (`authRing`) and one for Dashboard Caching (`dashboardRing`).
 - **Deterministic Routing**: When a user requests data, their `userId` is hashed using MD5 to route to the nearest node.
 - **Node Rebalancing & Dynamic Scaling**: The hash ring allows for the dynamic addition or removal of Redis nodes on the fly. If the system experiences high load, new Redis nodes can be spun up and added to the ring for horizontal scaling without downtime. The system mathematically drains existing hash values and distributes them to the new nodes seamlessly.
@@ -208,30 +211,30 @@ Tracking which questions a student has attempted across thousands of questions c
 - Retrieving all attempted questions for a student becomes an incredibly fast bitwise operation rather than an expensive SQL `JOIN` or `SELECT`.
 
 ### 5. In-Memory Data Flow & Caching Strategies
-To reduce database bottleneck during ongoing tests, Redis acts as the primary data layer.
-- **Write-Heavy Operations**: Live analytics and question statuses are primarily written to Redis.
-- **2-Minute Sync via RabbitMQ**: During the test time, updates occur every **2 minutes**. The data flows from Redis, gets pushed to a RabbitMQ queue, and is then consumed and saved into the primary database.
-- **Cleanup**: Once securely persisted, the database workflow explicitly deletes the temporary data from Redis to free up memory.
-- **Heavy Read Caching**: Static data like Question Banks and Year-wise Papers are heavily cached.
+To reduce database bottleneck during ongoing tests, the two Redis architectures split the load:
+- **Heavy Read Caching (Single Redis)**: Static data like Question Banks, Chapter Data, and Year-wise Papers are heavily cached in a single Redis instance. On a cache miss, the DB is queried.
+- **Write-Heavy Operations (Hash Ring)**: Live analytics, OTPs, and active test statuses are primarily written to the Redis Hash Ring.
+- **2-Minute Sync via RabbitMQ**: During the test time, updates occur every **2 minutes**. The data flows from the Redis Hash Ring, gets pushed to a RabbitMQ queue, and is then consumed and saved into the primary database.
+- **Cleanup**: Once securely persisted, the database workflow explicitly deletes the temporary data from the Hash Ring to free up memory.
 
 ```mermaid
 sequenceDiagram
     participant Student
     participant API
-    participant Redis
+    participant RedisRing
     participant RabbitMQ
     participant DB
     
     Student->>API: Submits active test/analytics data
-    API->>Redis: Temporarily store/update test data
-    Redis-->>API: Acknowledged
+    API->>RedisRing: Temporarily store/update test data
+    RedisRing-->>API: Acknowledged
     API-->>Student: Return JSON Response
     
     Note over API,DB: Every 2 minutes during active test
-    Redis->>RabbitMQ: Push test data updates to Queue
+    RedisRing->>RabbitMQ: Push test data updates to Queue
     RabbitMQ->>DB: Consume & Persist final details securely
     DB-->>RabbitMQ: Persisted
-    DB->>Redis: Delete temporary data (Free Memory)
+    DB->>RedisRing: Delete temporary data (Free Memory)
 ```
 
 ### 6. Message Queues & Background Workers
@@ -292,7 +295,7 @@ This project is built by a team of three:
 
 ## ℹ️ About
 
-**Tanishq Jain **  
+**Tanishq Jain**  
 Handles all backend infrastructure, including the API layer, question bank architecture, test session handling, Redis caching, RabbitMQ workers, and results computation.
 - **LinkedIn**: [tanishq-jain-6b90b1292](https://www.linkedin.com/in/tanishq-jain-6b90b1292/)
 - **GitHub**: [Tanishq112005](https://github.com/Tanishq112005)
