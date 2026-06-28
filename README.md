@@ -292,7 +292,7 @@ This project is built by a team of three:
 
 ## ℹ️ About
 
-**Tanishq Jain (Backend Lead)**  
+**Tanishq Jain **  
 Handles all backend infrastructure, including the API layer, question bank architecture, test session handling, Redis caching, RabbitMQ workers, and results computation.
 - **LinkedIn**: [tanishq-jain-6b90b1292](https://www.linkedin.com/in/tanishq-jain-6b90b1292/)
 - **GitHub**: [Tanishq112005](https://github.com/Tanishq112005)
