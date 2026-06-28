@@ -31,7 +31,7 @@
 | **Database & ORM** | TiDB (MySQL), Prisma ORM |
 | **Caching & In-Memory** | Aiven Valkey (Single Cache & Hash Ring), Redis Cloud (Bitmaps) |
 | **Message Broker** | RabbitMQ via CloudAMQP |
-| **Storage & CDN** | Backblaze B2, Cloudflare |
+| **Storage & File Caching** | Backblaze B2, Cloudflare Cache |
 | **Secrets Management** | Doppler (Env Injection) |
 | **Email Service** | Brevo |
 | **Authentication** | JWT, Bcrypt, Google OAuth |
@@ -75,7 +75,7 @@
 
 ## 🏗️ Backend System Architecture
 
-> 💡 **Zero-Cost & High-Scale Architecture**: The entire backend infrastructure—including the Node.js API, TiDB database, Redis caching, RabbitMQ message queues, and CDN file storage—is heavily optimized and engineered to run **completely within the free tier** of its respective cloud providers while easily **handling up to 10,000+ concurrent users**.
+> 💡 **Zero-Cost & High-Scale Architecture**: The entire backend infrastructure—including the Node.js API, TiDB database, Redis caching, RabbitMQ message queues, and Cloudflare file caching—is heavily optimized and engineered to run **completely within the free tier** of its respective cloud providers while easily **handling up to 10,000+ concurrent users**.
 
 This backend follows a standard Service-Repository pattern, decoupling business logic from data access. It is designed to be highly scalable, performant, and cost-effective.
 
@@ -123,7 +123,7 @@ flowchart TB
 
     %% File Storage
     subgraph Storage ["Static Storage"]
-        CF{Cloudflare CDN}:::storage
+        CF{Cloudflare Cache}:::storage
         B2[(Backblaze B2)]:::storage
     end
 
@@ -156,7 +156,7 @@ flowchart TB
     CF -->|Fetch if missed| B2
 ```
 
-*Note: The system utilizes two distinct Redis architectures. A **Single Redis Cache** is used for read-heavy static data (like Chapter Data and PYQ metadata); if a cache miss occurs here, the Core Services query the Database directly. Meanwhile, a **Redis Hash Ring** is used exclusively for temporary, write-heavy session data (like active test data, dashboard analytics, and Auth OTPs) until it is permanently saved. Backblaze B2 is heavily utilized for storing the actual images of the questions. The API returns the JSON Data / URL, and only then does the client hit the Backblaze B2 service (via Cloudflare) to fetch the actual file. Additionally, Core Services also interact with the CDN to fetch these question images when required for internal processing.*
+*Note: The system utilizes two distinct Redis architectures. A **Single Redis Cache** is used for read-heavy static data (like Chapter Data and PYQ metadata); if a cache miss occurs here, the Core Services query the Database directly. Meanwhile, a **Redis Hash Ring** is used exclusively for temporary, write-heavy session data (like active test data, dashboard analytics, and Auth OTPs) until it is permanently saved. Backblaze B2 is heavily utilized for storing the actual images of the questions. The API returns the JSON Data / URL, and only then does the client hit the Backblaze B2 service (via Cloudflare) to fetch the actual file. Additionally, Core Services also interact with the Cloudflare Cache to fetch these question images when required for internal processing.*
 
 ### 2. Consistent Hashing & Redis Clusters (For Temporary Data)
 To ensure high availability and load distribution across multiple Redis instances, the system implements a custom **Hash Ring (`HashRingService`)** for Consistent Hashing. This cluster is **strictly used for temporary, volatile data** (like active test sessions, auth OTPs, and real-time dashboard analytics) until it is persisted. 
@@ -271,10 +271,10 @@ graph TD
 - **Transactional Emails**: Sending OTPs and notifications via `email_queue`.
 - **Student Streak Management**: Tracks and updates consecutive days of activity in cache first via the `streak_update_queue`.
 
-### 7. File Storage (Backblaze B2 & Cloudflare)
+### 7. File Storage (Backblaze B2 & Cloudflare Cache)
 - **Deployment**: The Node.js/Express backend itself is deployed on **Render** (via free/hobby tiers).
 - **Storage**: Files are uploaded directly to **Backblaze B2**.
-- **CDN & Caching**: **Cloudflare** is placed *only* in front of Backblaze B2 to serve the static assets. 
+- **Cloudflare Caching**: **Cloudflare Cache** is placed *only* in front of Backblaze B2 to cache and serve the static assets. 
 - **Free Tier Synergy**: The Bandwidth Alliance ensures data transfer between them is free, drastically reducing direct reads to Backblaze.
 
 ### 8. Authentication Flow & Database Pooling
