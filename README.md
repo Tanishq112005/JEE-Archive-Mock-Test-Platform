@@ -2,7 +2,7 @@
 
 **A full-featured JEE mock test platform with a pixel-accurate NTA exam replica, a custom chapterwise test interface, topic-wise PYQ practice, full-length mocks, and detailed performance analytics with question-level solution breakdowns.**
 
-[jeearchive.com](https://jeearchive.com)
+[jeearchive.com](https://jeearchive.com) | [Live API (Render)](https://jee-mock-test-backend-5bgg.onrender.com)
 
 ---
 
@@ -25,14 +25,16 @@
 ---
 
 ## 🛠️ Backend Tech Stack
-| Layer | Technology |
+| Layer | Technology & Provider |
 |--------|-------|
 | **Core Environment** | Node.js, Express.js, TypeScript |
-| **Database & ORM** | TiDB / MySQL, Prisma ORM |
-| **Caching & In-Memory** | Redis (with Bitmaps & Consistent Hashing) |
-| **Message Broker** | RabbitMQ |
+| **Database & ORM** | TiDB (MySQL), Prisma ORM |
+| **Caching & In-Memory** | Redis Cloud & Aiven (Valkey) |
+| **Message Broker** | RabbitMQ via CloudAMQP |
 | **Storage & CDN** | Backblaze B2, Cloudflare |
-| **Authentication** | JWT (JSON Web Tokens), Bcrypt |
+| **Secrets Management** | Doppler (Env Injection) |
+| **Email Service** | Brevo |
+| **Authentication** | JWT, Bcrypt, Google OAuth |
 | **Deployment** | Render |
 
 ---
@@ -49,8 +51,6 @@
 ---
 
 ## 📸 Features Overview & UI Screenshots
-
-*Upload your UI screenshots to the respective sections below:*
 
 ### NTA Exam Interface Replica
 ![NTA Exam Interface Replica (Light)](./images/Screenshot%202026-06-28%20151552.png)
@@ -260,7 +260,7 @@ graph LR
 - **Free Tier Synergy**: The Bandwidth Alliance ensures data transfer between them is free, drastically reducing direct reads to Backblaze.
 
 ### 8. Authentication Flow & Database Pooling
-- **Authentication**: Handled securely using JSON Web Tokens (JWT) and Bcrypt for password hashing.
+- **Authentication**: Supports traditional email/password login securely hashed with **Bcrypt**, alongside seamless **Google OAuth** integration. Sessions are securely managed using **JSON Web Tokens (JWT)**.
 - **Database (TiDB / MySQL)**: Uses **Prisma ORM**. Prisma handles connection pooling out of the box.
 - **Query Optimization**: Repositories leverage `findMany` batching, selective `select` statements, and `$transaction` blocks to ensure atomicity.
 
@@ -277,7 +277,7 @@ This project is built by a team of three:
 
 ## ℹ️ About
 
-**Tanishq Jain**  
+**Tanishq Jain (Backend Lead)**  
 Handles all backend infrastructure, including the API layer, question bank architecture, test session handling, Redis caching, RabbitMQ workers, and results computation.
 - **LinkedIn**: [tanishq-jain-6b90b1292](https://www.linkedin.com/in/tanishq-jain-6b90b1292/)
 - **GitHub**: [Tanishq112005](https://github.com/Tanishq112005)
