@@ -80,41 +80,50 @@
 This backend follows a standard Service-Repository pattern, decoupling business logic from data access. It is designed to be highly scalable, performant, and cost-effective.
 
 ```mermaid
-flowchart LR
+flowchart TB
+    %% Styling Classes
+    classDef client fill:#4285F4,stroke:#fff,stroke-width:2px,color:#fff
+    classDef storage fill:#E04A3A,stroke:#fff,stroke-width:2px,color:#fff
+    classDef gateway fill:#8E44AD,stroke:#fff,stroke-width:2px,color:#fff
+    classDef server fill:#0F9D58,stroke:#fff,stroke-width:2px,color:#fff
+    classDef queue fill:#F4B400,stroke:#fff,stroke-width:2px,color:#fff
+    classDef data fill:#0D47A1,stroke:#fff,stroke-width:2px,color:#fff
+    classDef cache fill:#DB4437,stroke:#fff,stroke-width:2px,color:#fff
+
     %% Client Layer
     subgraph Clients ["Client Layer"]
-        Student[Student App / Web]
-    end
-
-    %% File Storage
-    subgraph Storage ["Static Storage"]
-        CF{Cloudflare CDN}
-        B2[(Backblaze B2)]
+        Student[Student App / Web]:::client
     end
 
     %% API Gateway & Hosting
     subgraph Gateway ["API Gateway (Render)"]
-        RL[Rate Limiters]
-        Auth[JWT Auth]
+        RL[Rate Limiters]:::gateway
+        Auth[JWT Auth]:::gateway
     end
 
     %% Service Layer
     subgraph AppServer ["Application Server (Express)"]
-        Router[Router]
-        Services[Core Services]
-    end
-
-    %% Async Tasks
-    subgraph AsyncWorker ["Background Processing"]
-        RMQ[[RabbitMQ]]
-        Workers(Worker Nodes)
+        Router[Router]:::server
+        Services[Core Services]:::server
     end
 
     %% Data Stores
     subgraph DataLayer ["Data & Persistence"]
-        Redis[(Redis Hash Ring)]
-        Prisma[Prisma ORM]
-        DB[(TiDB / MySQL)]
+        Redis[(Redis Hash Ring)]:::cache
+        Prisma[Prisma ORM]:::data
+        DB[(TiDB / MySQL)]:::data
+    end
+
+    %% Async Tasks
+    subgraph AsyncWorker ["Background Processing"]
+        RMQ[[RabbitMQ]]:::queue
+        Workers(Worker Nodes):::server
+    end
+
+    %% File Storage
+    subgraph Storage ["Static Storage"]
+        CF{Cloudflare CDN}:::storage
+        B2[(Backblaze B2)]:::storage
     end
 
     %% Primary Request Flow
@@ -153,13 +162,15 @@ To ensure high availability and load distribution across multiple Redis instance
 - **Node Rebalancing & Dynamic Scaling**: The hash ring allows for the dynamic addition or removal of Redis nodes on the fly. If the system experiences high load, new Redis nodes can be spun up and added to the ring for horizontal scaling without downtime. The system mathematically drains existing hash values and distributes them to the new nodes seamlessly.
 
 ```mermaid
-graph LR
+graph TD
+    classDef cache fill:#DB4437,stroke:#fff,stroke-width:2px,color:#fff
+    
     subgraph HashRing [Consistent Hash Ring]
-        direction LR
-        N1((Node A <br/> Hash: 100)) --> N2((Node B <br/> Hash: 300))
-        N2 --> N3((Node C <br/> Hash: 500))
-        N3 --> N4((Node D <br/> Hash: 700))
-        N4 --> N5((Node E <br/> Hash: 900))
+        direction TB
+        N1((Node A <br/> Hash: 100)):::cache --> N2((Node B <br/> Hash: 300)):::cache
+        N2 --> N3((Node C <br/> Hash: 500)):::cache
+        N3 --> N4((Node D <br/> Hash: 700)):::cache
+        N4 --> N5((Node E <br/> Hash: 900)):::cache
         N5 -.->|Wraps Around| N1
     end
     
@@ -230,20 +241,24 @@ Heavy tasks are offloaded to **RabbitMQ**.
 - **Consumers (Workers)**: Independent worker processes consume these messages to perform heavy lifting (e.g., parsing 100+ questions for test evaluation).
 
 ```mermaid
-graph LR
-    API[API Service] -->|Publish| Exchange((RabbitMQ Exchange))
+graph TD
+    classDef server fill:#0F9D58,stroke:#fff,stroke-width:2px,color:#fff
+    classDef queue fill:#F4B400,stroke:#fff,stroke-width:2px,color:#fff
+    classDef data fill:#0D47A1,stroke:#fff,stroke-width:2px,color:#fff
+
+    API[API Service]:::server -->|Publish| Exchange((RabbitMQ Exchange)):::queue
     
-    Exchange --> Q1[email_queue]
-    Exchange --> Q2[streak_update_queue]
-    Exchange --> Q3[testEvalution_queue]
-    Exchange --> QN[...other queues...]
+    Exchange --> Q1[email_queue]:::queue
+    Exchange --> Q2[streak_update_queue]:::queue
+    Exchange --> Q3[testEvalution_queue]:::queue
+    Exchange --> QN[...other queues...]:::queue
     
-    Q1 --> W1[Email Worker]
-    Q2 --> W2[Streak Worker]
-    Q3 --> W3[Test Eval Worker]
-    QN --> WN[Other Workers]
+    Q1 --> W1[Email Worker]:::server
+    Q2 --> W2[Streak Worker]:::server
+    Q3 --> W3[Test Eval Worker]:::server
+    QN --> WN[Other Workers]:::server
     
-    W1 --> DB[(TiDB / MySQL)]
+    W1 --> DB[(TiDB / MySQL)]:::data
     W2 --> DB
     W3 --> DB
     WN --> DB
