@@ -241,7 +241,7 @@ sequenceDiagram
 Heavy tasks are offloaded to **RabbitMQ**.
 - **Queues Utilized**: `email_queue`, `emailAdding_queue`, `streak_update_queue`, `studentTestAnalytics_queue`, `submitChapterAttempt_queue`, `testEvalution_queue`, `updateChapterAttempt_queue`, `updateTestDetails_queue`.
 - **Producers**: The API services publish messages to specific exchanges.
-- **Consumers (Workers)**: Independent worker processes consume these messages to perform heavy lifting (e.g., parsing 100+ questions for test evaluation).
+- **Consumers (Workers)**: Over **7 independent worker processes** are running concurrently on different **Render** services. They consume these messages to perform heavy lifting asynchronously (e.g., parsing 100+ questions for test evaluation).
 
 ```mermaid
 graph TD
@@ -279,6 +279,41 @@ graph TD
 
 ### 8. Authentication Flow & Database Pooling
 - **Authentication**: Supports traditional email/password login securely hashed with **Bcrypt**, alongside seamless **Google OAuth** integration. Sessions are securely managed using **JSON Web Tokens (JWT)**.
+- **OTP Verification Flow**: When a user registers or resets a password, a generated OTP is temporarily stored in the **Redis Hash Ring**. To prevent abuse, OTP requests are strictly rate-limited using the **Sliding Window Log Algorithm**. If the rate limit is passed, an event is published to the `email_queue`. A dedicated background worker on Render consumes this event and emails the OTP to the user via the **Brevo** service. Once the user enters the OTP, the API verifies it instantly against the Hash Ring.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API
+    participant SlidingWindow as Rate Limiter (Sliding Window)
+    participant RedisRing as Redis (Hash Ring)
+    participant RMQ as RabbitMQ
+    participant Worker as Auth Worker (Render)
+    participant Brevo as Brevo (Email)
+    
+    User->>API: 1. Request OTP (Registration/Reset)
+    API->>SlidingWindow: 2. Check Sliding Window Log
+    
+    alt Too Many Requests
+        SlidingWindow-->>API: Limit Exceeded
+        API-->>User: 429 Too Many Requests Error
+    else Allowed
+        SlidingWindow-->>API: Allow Request
+        API->>RedisRing: 3. Store OTP with Expiration
+        API->>RMQ: 4. Publish event to `email_queue`
+        API-->>User: 5. Acknowledge Request
+        
+        RMQ->>Worker: 6. Consume `email_queue` event
+        Worker->>Brevo: 7. Trigger Email Delivery
+        Brevo-->>User: 8. Deliver OTP Email
+        
+        User->>API: 9. Submit OTP
+        API->>RedisRing: 10. Validate OTP
+        RedisRing-->>API: Valid
+        API-->>User: 11. Success (JWT Issued)
+    end
+```
+
 - **Database (TiDB / MySQL)**: Uses **Prisma ORM**. Prisma handles connection pooling out of the box.
 - **Query Optimization**: Repositories leverage `findMany` batching, selective `select` statements, and `$transaction` blocks to ensure atomicity.
 
@@ -295,7 +330,7 @@ This project is built by a team of three:
 
 ## ℹ️ About
 
-**Tanishq Jain**  
+**Tanishq Jain (Backend Lead)**  
 Handles all backend infrastructure, including the API layer, question bank architecture, test session handling, Redis caching, RabbitMQ workers, and results computation.
 - **LinkedIn**: [tanishq-jain-6b90b1292](https://www.linkedin.com/in/tanishq-jain-6b90b1292/)
 - **GitHub**: [Tanishq112005](https://github.com/Tanishq112005)
