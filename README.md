@@ -1,0 +1,293 @@
+# JEEArchive - Mock Test Platform Backend
+
+**A full-featured JEE mock test platform with a pixel-accurate NTA exam replica, a custom chapterwise test interface, topic-wise PYQ practice, full-length mocks, and detailed performance analytics with question-level solution breakdowns.**
+
+[jeearchive.com](https://jeearchive.com)
+
+---
+
+## 🔒 Repository Notice
+**This repository is private** to protect proprietary question-bank infrastructure, exam-engine logic, and analytics pipelines. The codebase powers a live mock-test platform with an active beta user base.
+
+**Recruiters and collaborators:** I am happy to grant private repo access or walk you through the codebase on a call. Reach me at [tanishqjain1109@gmail.com](mailto:tanishqjain1109@gmail.com).
+
+---
+
+## 📊 Platform Stats
+| Metric | Value |
+|--------|-------|
+| **Beta Users Onboarded** | 1,000+ |
+| **Question Bank Size** | 16,484+ questions |
+| **REST API Endpoints** | 50+ |
+| **Subjects Covered** | Physics, Chemistry, Mathematics |
+| **Test Modes** | NTA Replica, Chapterwise, Topic-wise PYQ, Chapterwise PYQ, Full-length Mock |
+
+---
+
+## 🛠️ Backend Tech Stack
+| Layer | Technology |
+|--------|-------|
+| **Core Environment** | Node.js, Express.js, TypeScript |
+| **Database & ORM** | TiDB / MySQL, Prisma ORM |
+| **Caching & In-Memory** | Redis (with Bitmaps & Consistent Hashing) |
+| **Message Broker** | RabbitMQ |
+| **Storage & CDN** | Backblaze B2, Cloudflare |
+| **Authentication** | JWT (JSON Web Tokens), Bcrypt |
+| **Deployment** | Render |
+
+---
+
+## 🚀 Features
+
+- **NTA Exam Interface Replica**: Pixel-accurate replication of the NTA exam portal UI, matched in layout, color scheme, and interaction patterns. Timed paper flow behaving exactly like the live exam.
+- **Custom Chapterwise Test Interface**: A separate, purpose-built interface designed for focused, distraction-free practice on a single chapter at a time.
+- **PYQ Practice**: Chapterwise and Topic-wise PYQs covering every chapter across Physics, Chemistry, and Mathematics. Full-length mock tests replicating actual JEE patterns.
+- **Review and Submission**: Auto-save of responses to prevent data loss mid-test. Detailed post-submission breakdown of answers.
+- **Detailed Analytics Section**: Chapterwise score visualization, accuracy trend charts, weak-area breakdowns, and per-session performance history.
+- **Solution Breakdown**: Full, step-by-step solutions available for every question attempted.
+
+---
+
+## 📸 Features Overview & UI Screenshots
+
+*Upload your UI screenshots to the respective sections below:*
+
+### NTA Exam Interface Replica
+![NTA Exam Interface Replica (Light)](./path/to/jeearchive-nta-test-interface.png)
+![NTA Exam Interface Replica (Dark)](./path/to/jeearchive-nta-test-interface-dark-mode.png)
+
+### Custom Chapterwise Test Interface
+![Custom Chapterwise Test Interface](./path/to/jeearchive-chapterwise-practice-interface.png)
+
+### Topic-wise and Chapterwise PYQ Practice
+![PYQ List Interface](./path/to/jeearchive-chpaterwise-pyq-list.png)
+
+### Performance Analytics Dashboard
+![Performance Analytics Dashboard](./path/to/jeearchive-dashboard.png)
+
+### Solution Breakdown View
+![Solution Breakdown View](./path/to/jeearchive-solution-interface.png)
+
+### Mobile View
+![Mobile View](./path/to/mobile-view.png)
+
+---
+
+## 🏗️ Backend System Architecture
+
+> 💡 **Zero-Cost & High-Scale Architecture**: The entire backend infrastructure—including the Node.js API, TiDB database, Redis caching, RabbitMQ message queues, and CDN file storage—is heavily optimized and engineered to run **completely within the free tier** of its respective cloud providers while easily **handling up to 10,000+ concurrent users**.
+
+This backend follows a standard Service-Repository pattern, decoupling business logic from data access. It is designed to be highly scalable, performant, and cost-effective.
+
+```mermaid
+flowchart LR
+    %% Client Layer
+    subgraph Clients ["Client Layer"]
+        Student[Student App / Web]
+    end
+
+    %% File Storage
+    subgraph Storage ["Static Storage"]
+        CF{Cloudflare CDN}
+        B2[(Backblaze B2)]
+    end
+
+    %% API Gateway & Hosting
+    subgraph Gateway ["API Gateway (Render)"]
+        RL[Rate Limiters]
+        Auth[JWT Auth]
+    end
+
+    %% Service Layer
+    subgraph AppServer ["Application Server (Express)"]
+        Router[Router]
+        Services[Core Services]
+    end
+
+    %% Async Tasks
+    subgraph AsyncWorker ["Background Processing"]
+        RMQ[[RabbitMQ]]
+        Workers(Worker Nodes)
+    end
+
+    %% Data Stores
+    subgraph DataLayer ["Data & Persistence"]
+        Redis[(Redis Hash Ring)]
+        Prisma[Prisma ORM]
+        DB[(TiDB / MySQL)]
+    end
+
+    %% Primary Request Flow
+    Student -->|1. API Request| RL
+    RL --> Auth
+    Auth --> Router
+    Router --> Services
+    
+    %% Data Flow
+    Services <-->|Fast Data / Caching| Redis
+    Services <-->|Persistent Data| Prisma
+    Prisma <--> DB
+    
+    %% Async Flow
+    Services -->|Publish Event| RMQ
+    RMQ -->|Consume| Workers
+    Workers -->|Persist Background Task| Prisma
+    
+    %% PYQ Flow Highlight
+    Student -.->|2. Fetch PYQ URL| RL
+    Services -.->|Check PYQ Meta| Redis
+    Services -.->|3. Return JSON Data / URL| Student
+    Student -->|4. Download File| CF
+    
+    %% Internal Image Fetching
+    Services -->|Fetch Question Images| CF
+    CF -->|Fetch if missed| B2
+```
+
+*Note: Backblaze B2 is heavily utilized for storing the images of the questions. When a student requests a PYQ (Previous Year Question paper), the API first checks the Redis cache, and if not found, queries the DB for the metadata. The API returns the JSON Data / URL, and only then does the client hit the Backblaze B2 service (via Cloudflare) to fetch the actual file. Additionally, Core Services also interact with the CDN to fetch these question images when required for internal processing.*
+
+### 2. Consistent Hashing & Redis Clusters
+To ensure high availability and load distribution across multiple Redis instances, the system implements a custom **Hash Ring (`HashRingService`)** for Consistent Hashing. 
+- **Dual Hash Rings**: The system maintains two separate rings, one for Authentication (`authRing`) and one for Dashboard Caching (`dashboardRing`).
+- **Deterministic Routing**: When a user requests data, their `userId` is hashed using MD5 to route to the nearest node.
+- **Node Rebalancing & Dynamic Scaling**: The hash ring allows for the dynamic addition or removal of Redis nodes on the fly. If the system experiences high load, new Redis nodes can be spun up and added to the ring for horizontal scaling without downtime. The system mathematically drains existing hash values and distributes them to the new nodes seamlessly.
+
+```mermaid
+graph LR
+    subgraph HashRing [Consistent Hash Ring]
+        direction LR
+        N1((Node A <br/> Hash: 100)) --> N2((Node B <br/> Hash: 300))
+        N2 --> N3((Node C <br/> Hash: 500))
+        N3 --> N4((Node D <br/> Hash: 700))
+        N4 --> N5((Node E <br/> Hash: 900))
+        N5 -.->|Wraps Around| N1
+    end
+    
+    User[Student Request] --> Hash[MD5 Hash: 650]
+    Hash -->|Routes to next highest| N4
+```
+
+### 3. Rate Limiting Strategies
+Two distinct algorithms are implemented based on route sensitivity:
+1. **Token Bucket Algorithm**: Standard API endpoints (Analytics, Banners). Tokens refilled at a constant rate.
+2. **Sliding Window Log Algorithm**: Sensitive Auth routes (OTP, Login). Keeps a rolling timestamp log to strictly prevent brute-force attacks.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Route
+    participant TokenBucket
+    participant SlidingWindow
+    
+    User->>Route: GET /api/analytics
+    Route->>TokenBucket: Check Tokens
+    TokenBucket-->>Route: Allow (Token Deducted)
+    
+    User->>Route: POST /api/auth/login
+    Route->>SlidingWindow: Check Rolling Log
+    SlidingWindow-->>Route: Allow (Log Updated)
+```
+
+### 4. Redis Bitmap & Hashing Structure
+For ultra-fast, memory-efficient data tracking, the system utilizes **Redis Bitmaps (Bitfields)**. 
+
+Tracking which questions a student has attempted across thousands of questions can be database-heavy. Instead:
+- A `questionBitmap:indexMap` (Redis Hash) maps every `questionId` to a specific bit index (0, 1, 2...).
+- When a student attempts a question, their personal **Redis Bitmap** flips the bit at that specific index from `0` to `1`.
+- Retrieving all attempted questions for a student becomes an incredibly fast bitwise operation rather than an expensive SQL `JOIN` or `SELECT`.
+
+### 5. In-Memory Data Flow & Caching Strategies
+To reduce database bottleneck during ongoing tests, Redis acts as the primary data layer.
+- **Write-Heavy Operations**: Live analytics and question statuses are primarily written to Redis.
+- **2-Minute Sync via RabbitMQ**: During the test time, updates occur every **2 minutes**. The data flows from Redis, gets pushed to a RabbitMQ queue, and is then consumed and saved into the primary database.
+- **Cleanup**: Once securely persisted, the database workflow explicitly deletes the temporary data from Redis to free up memory.
+- **Heavy Read Caching**: Static data like Question Banks and Year-wise Papers are heavily cached.
+
+```mermaid
+sequenceDiagram
+    participant Student
+    participant API
+    participant Redis
+    participant RabbitMQ
+    participant DB
+    
+    Student->>API: Submits active test/analytics data
+    API->>Redis: Temporarily store/update test data
+    Redis-->>API: Acknowledged
+    API-->>Student: Return JSON Response
+    
+    Note over API,DB: Every 2 minutes during active test
+    Redis->>RabbitMQ: Push test data updates to Queue
+    RabbitMQ->>DB: Consume & Persist final details securely
+    DB-->>RabbitMQ: Persisted
+    DB->>Redis: Delete temporary data (Free Memory)
+```
+
+### 6. Message Queues & Background Workers
+Heavy tasks are offloaded to **RabbitMQ**.
+- **Queues Utilized**: `email_queue`, `emailAdding_queue`, `streak_update_queue`, `studentTestAnalytics_queue`, `submitChapterAttempt_queue`, `testEvalution_queue`, `updateChapterAttempt_queue`, `updateTestDetails_queue`.
+- **Producers**: The API services publish messages to specific exchanges.
+- **Consumers (Workers)**: Independent worker processes consume these messages to perform heavy lifting (e.g., parsing 100+ questions for test evaluation).
+
+```mermaid
+graph LR
+    API[API Service] -->|Publish| Exchange((RabbitMQ Exchange))
+    
+    Exchange --> Q1[email_queue]
+    Exchange --> Q2[streak_update_queue]
+    Exchange --> Q3[testEvalution_queue]
+    Exchange --> QN[...other queues...]
+    
+    Q1 --> W1[Email Worker]
+    Q2 --> W2[Streak Worker]
+    Q3 --> W3[Test Eval Worker]
+    QN --> WN[Other Workers]
+    
+    W1 --> DB[(TiDB / MySQL)]
+    W2 --> DB
+    W3 --> DB
+    WN --> DB
+```
+
+**Additional Background Services:**
+- **Transactional Emails**: Sending OTPs and notifications via `email_queue`.
+- **Student Streak Management**: Tracks and updates consecutive days of activity in cache first via the `streak_update_queue`.
+
+### 7. File Storage (Backblaze B2 & Cloudflare)
+- **Deployment**: The Node.js/Express backend itself is deployed on **Render** (via free/hobby tiers).
+- **Storage**: Files are uploaded directly to **Backblaze B2**.
+- **CDN & Caching**: **Cloudflare** is placed *only* in front of Backblaze B2 to serve the static assets. 
+- **Free Tier Synergy**: The Bandwidth Alliance ensures data transfer between them is free, drastically reducing direct reads to Backblaze.
+
+### 8. Authentication Flow & Database Pooling
+- **Authentication**: Handled securely using JSON Web Tokens (JWT) and Bcrypt for password hashing.
+- **Database (TiDB / MySQL)**: Uses **Prisma ORM**. Prisma handles connection pooling out of the box.
+- **Query Optimization**: Repositories leverage `findMany` batching, selective `select` statements, and `$transaction` blocks to ensure atomicity.
+
+---
+
+## 👥 Team
+
+This project is built by a team of three:
+- **Tanishq Jain** (Backend Developer) - Handles all backend infrastructure, including building the REST API endpoints, question bank architecture, and test session caching.
+- **Ayush Singh** (Frontend Developer) - Handles the complete frontend of the platform, including the NTA replica interface, custom chapterwise practice UI, and analytics dashboard.
+- **Utkarsh Singh** (User Operations) - Handles everything user-facing outside the product itself, including direct user communication and marketing strategy.
+
+---
+
+## ℹ️ About
+
+**Tanishq Jain**  
+Handles all backend infrastructure, including the API layer, question bank architecture, test session handling, Redis caching, RabbitMQ workers, and results computation.
+- **LinkedIn**: [tanishq-jain-6b90b1292](https://www.linkedin.com/in/tanishq-jain-6b90b1292/)
+- **GitHub**: [Tanishq112005](https://github.com/Tanishq112005)
+- **Email**: [tanishqjain1109@gmail.com](mailto:tanishqjain1109@gmail.com)
+
+**IIIT Bhagalpur, B.Tech CSE, 2023-2027**
+
+---
+
+## 📜 License
+
+**This project is proprietary and not open source.** 
+All rights reserved. The source code is not available for public use, reproduction, or distribution.
